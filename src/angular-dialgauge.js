@@ -4,6 +4,8 @@
  * Author: Chris Jackson
  *
  * License: MIT
+ *
+ * Notes: Do not update the code since it has been throw a few changes due to bugs
  */
 angular.module('angular-dialgauge', [
     'ngSanitize'
@@ -25,6 +27,7 @@ angular.module('angular-dialgauge', [
                 borderColor: '@',
                 trackColor: '@',
                 barColor: '@',
+                barColorMiddle: '@',
                 barColorEnd: '@',
                 barWidth: '@',
                 barAngle: '@',
@@ -42,7 +45,7 @@ angular.module('angular-dialgauge', [
                 options: '=?'
             },
             template: '' +
-            '<div style="width:100%;height:100%;" ng-bind-html="gauge"></div>',
+            '<div style="width:100%;height:100%;" ng-bind-html="gauge"</div>',
             controller: function ($scope, $element) {
                 // Define variables for this gauge
                 var radDeg = 180 / Math.PI;
@@ -76,6 +79,7 @@ angular.module('angular-dialgauge', [
                     borderColor: "#a0a0a0",
                     trackColor: '#c0c0c0',
                     barColor: 'red',
+                    barColorMiddle: '',
                     barColorEnd: '',
                     barWidth: 3,
                     barAngle: 0,
@@ -148,6 +152,7 @@ angular.module('angular-dialgauge', [
                     'lineCap',
                     'barWidth',
                     'barColor',
+                    'barColorMiddle',
                     'barColorEnd',
                     'barAngle',
                     'trackColor',
@@ -177,11 +182,15 @@ angular.module('angular-dialgauge', [
 
                 // Set a watch on the model so we can update the dynamic part of the gauge
                 $scope.$watch("ngModel", function (value) {
+
+
                     // The gauge isn't updated immediately.
                     // We use a timer to update the gauge dynamically
-                    if (currentValue == null) {
+                    if (currentValue == null ) {
                         currentValue = value;
-                        updateBar(value);
+                        if (currentValue !== undefined) {
+                            updateBar(value);
+                        }
                         return;
                     }
                     if (timer != null) {
@@ -191,15 +200,17 @@ angular.module('angular-dialgauge', [
                     intermediateValue = currentValue;
                     currentValue = value;
                     timer = $interval(function () {
-                            var step = (currentValue - intermediateValue) / 10;
-                            if (Math.abs(step) < valWindow) {
-                                intermediateValue = currentValue;
-                                $interval.cancel(timer);
+                            if (currentValue !== undefined) {
+                                var step = (currentValue - intermediateValue) / 10;
+                                if (Math.abs(step) < valWindow) {
+                                    intermediateValue = currentValue;
+                                    $interval.cancel(timer);
+                                }
+                                else {
+                                    intermediateValue += step;
+                                }
+                                updateBar(intermediateValue);
                             }
-                            else {
-                                intermediateValue += step;
-                            }
-                            updateBar(intermediateValue);
                         },
                         20, 100);
                 });
@@ -354,6 +365,9 @@ angular.module('angular-dialgauge', [
                 function updateBar(newValue) {
                     // Sanity check the value
                     var value = newValue;
+                    // Calculate the scale of filled gauge in percentage
+                    var filledGauge = 0;
+
                     if (newValue === undefined) {
                         value = cfg.scaleMin;
                     }
@@ -366,6 +380,7 @@ angular.module('angular-dialgauge', [
 
                     // Turn value into a percentage of the max angle
                     value = (value - cfg.scaleMin) / cfg.scaleMax;
+                    filledGauge = value * 100 ;
                     value = value * valueScale;
 
                     // Create the bar.
@@ -403,8 +418,27 @@ angular.module('angular-dialgauge', [
                         color = cfg.barColor;
                     }
                     else {
-                        var A = color2rgb(cfg.barColor[0]);
-                        var B = color2rgb(cfg.barColor[1]);
+                        // Choose the bar color according to the filledGauge percentage
+                        switch (true){
+                            case (filledGauge < 33):
+                                var A = color2rgb(cfg.barColor[0]);
+                                var B = color2rgb(cfg.barColor[1]);
+                                break;
+                            case (filledGauge >= 33 && filledGauge < 66):
+
+                                var A = color2rgb(cfg.barColor[1]);
+                                var B = color2rgb(cfg.barColor[1]);
+                                break;
+                            case (filledGauge <= 100):
+                                var A = color2rgb(cfg.barColor[1]);
+                                var B = color2rgb(cfg.barColor[2]);
+                                break;
+                            default:
+                                var A = color2rgb(cfg.barColor[0]);
+                                var B = color2rgb(cfg.barColor[2]);
+                                break;
+                        }
+
                         var gradient = [];
                         for (var c = 0; c < 3; c++) {
                             gradient[c] = A[c] + (B[c] - A[c]) * newValue / 100;
@@ -470,7 +504,6 @@ angular.module('angular-dialgauge', [
                     }
 
                     for (var key in defaults) {
-                        console.log("Checking ", key);
 
                         if (cfgObject[key] !== undefined) {
                             cfg[key] = cfgObject[key];
@@ -493,7 +526,8 @@ angular.module('angular-dialgauge', [
                     if (cfg.barColorEnd.length !== 0) {
                         var color = [];
                         color[0] = cfg.barColor;
-                        color[1] = cfg.barColorEnd;
+                        color[1] = cfg.barColorMiddle;
+                        color[2] = cfg.barColorEnd;
                         cfg.barColor = color;
                     }
 
